@@ -11,7 +11,7 @@ Puppet::Type.newtype(:gpg_public_key) do
   newparam(:homedir) do
     defaultto '~/.gnupg'
     validate do |value|
-      raise Puppet::Error, "'homedir' file path must be absolute, not '#{value}'" unless Puppet::Util.absolute_path?(value) or value == '~/.gnupg'
+      raise Puppet::Error, "'homedir' file path must be absolute, not '#{value}'" unless Puppet::Util.absolute_path?(value) || value == '~/.gnupg'
     end
   end
 
@@ -40,8 +40,11 @@ Puppet::Type.newtype(:gpg_public_key) do
 
     def remove_version_header(key)
       lines = key.split("\n")
-      lines.map! { |line| line unless line =~ /^Version/ }
+      lines.map! { |line| line unless line =~ %r{^Version} }
       lines.join("\n")
     end
+  end
+
+  newproperty(:trust) do
   end
 end

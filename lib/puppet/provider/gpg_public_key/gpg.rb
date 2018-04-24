@@ -3,27 +3,24 @@ Puppet::Type.type(:gpg_public_key).provide(:gpg) do
 
   def gpg_cmd(*args)
     resolved_executable = Puppet::Util.which('gpg')
-    raise Puppet::MissingCommand, _("Command %{name} is missing") % { name: @name } if resolved_executable.nil?
+    raise Puppet::MissingCommand, format(_("Command #{name} is missing"), name: @name) if resolved_executable.nil?
     command = [resolved_executable] + ['--homedir', resource[:homedir], '--batch'] + args
     Puppet::Util::Execution.execute(command, failonfail: true, combine: true, uid: resource[:user])
   end
 
-  def public_keys_ids(user, gnuhome)
+  def public_keys_ids
     begin
       output = gpg_cmd(['--list-keys', '--with-colons'])
     rescue Puppet::ExecutionFailure => e
       Puppet.debug("#get_public_keys had an error -> #{e.inspect}")
       return nil
     end
-    public_keys = output.split("\n").sort.grep(/^pub/)
+    public_keys = output.split("\n").sort.grep(%r{^pub})
     public_keys.map { |key| key.split(':')[4] }
   end
 
   def exists?
-    public_keys_ids(
-      resource[:user],
-      resource[:name]
-    ).include?(resource[:longkeyid])
+    public_keys_ids.include?(resource[:longkeyid])
   end
 
   def create
@@ -35,6 +32,8 @@ Puppet::Type.type(:gpg_public_key).provide(:gpg) do
     output = gpg_cmd(['--import', keyfile.path])
     Puppet.debug output
     keyfile.unlink
+
+    self.trust = resource[:trust]
   end
 
   def destroy
@@ -50,15 +49,85 @@ Puppet::Type.type(:gpg_public_key).provide(:gpg) do
   end
 
   def valid_public_key?(key)
-    return false if key.split("\n").first !~ /-----BEGIN PGP PUBLIC KEY BLOCK-----/
-    return false if key.split("\n").last  !~ /-----END PGP PUBLIC KEY BLOCK-----/
+    return false if key.split("\n").first !~ %r{-----BEGIN PGP PUBLIC KEY BLOCK-----}
+    return false if key.split("\n").last  !~ %r{-----END PGP PUBLIC KEY BLOCK-----}
     Puppet.debug('key looks valid')
     true
   end
 
-  def content=(value)
+  def content=(_value)
     Puppet.debug("Replacing key #{resource[:longkeyid]}")
     destroy
     create
+  end
+
+  def trust
+    trust = exported_owner_trust[fingerprint]
+    Puppet.debug("Trust in #{resource[:longkeyid]} is #{trust}")
+    return 'unknown' if trust.nil?
+    trust
+  end
+
+  def fingerprint
+    Puppet.debug("Getting fingerprint of key id #{resource[:longkeyid]}")
+    output = gpg_cmd(['--fingerprint', '--with-colons', resource[:longkeyid]])
+    fingerprint_line = output.split("\n").sort.grep(%r{^fpr}).first
+    fingerprint_line.split(':')[9]
+  end
+
+  def trust=(value)
+    Puppet.debug("Setting trust of #{resource[:longkeyid]} to #{value}")
+    Puppet.debug(trust_to_import(value))
+    trustfile = Tempfile.new('trust')
+    trustfile.write(trust_to_import(value))
+    trustfile.close
+    FileUtils.chmod 'a+r', trustfile.path
+    output = gpg_cmd(['--import-ownertrust', trustfile.path])
+    Puppet.debug output
+    trustfile.unlink
+  end
+
+  def trust_to_import(trust_string)
+    "#{fingerprint}:#{trustvalue(trust_string)}:\n"
+  end
+
+  def exported_owner_trust
+    owner_trust = {}
+    Puppet.debug "Exporting owner trust for #{resource[:longkeyid]}"
+    output = gpg_cmd(['--export-ownertrust'])
+    Puppet.debug output
+    output.split("\n").each do |line|
+      matchdata = line.match(%r{
+                             ^
+                             (?<key_id>\h{40})
+                             :
+                             (?<trust_value>[2-6])
+                             :
+                             }x)
+      next unless matchdata
+      owner_trust[matchdata[:key_id]] = truststring(matchdata[:trust_value].to_i)
+    end
+    owner_trust
+  end
+
+  def truststring(value)
+    str = trustmap.key(value)
+    raise Puppet::Error, 'Unrecognised trust value' if str.nil?
+    str
+  end
+
+  def trustvalue(str)
+    raise Puppet::Error, 'Unrecognised trust string' unless trustmap.key?(str)
+    trustmap[str]
+  end
+
+  def trustmap
+    {
+      'undefined' => 2,
+      'none'      => 3,
+      'marginal'  => 4,
+      'full'      => 5,
+      'ultimate'  => 6
+    }
   end
 end
