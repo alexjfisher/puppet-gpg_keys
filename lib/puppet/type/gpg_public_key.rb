@@ -4,6 +4,11 @@ Puppet::Type.newtype(:gpg_public_key) do
     defaultto :present
   end
 
+  validate do
+    raise Puppet::Error, "'user' is mandatory for gpg_public_key" unless self[:user]
+    raise Puppet::Error, "'longkeyid' is mandatory for gpg_public_key" unless self[:longkeyid]
+  end
+
   newparam(:name) do
     isnamevar
   end
@@ -16,20 +21,13 @@ Puppet::Type.newtype(:gpg_public_key) do
   end
 
   newparam(:user) do
-    validate do |value|
-      raise Puppet::Error, "'user' is mandatory for gpg_keyring_key" if value.nil?
-    end
   end
 
   newparam(:longkeyid) do
-    validate do |value|
-      raise Puppet::Error, "'longkeyid' is mandatory for longkeyid" if value.nil?
-    end
   end
 
   newproperty(:content) do
     validate do |value|
-      raise Puppet::Error, "'content' is mandatory for gpg_keyring_key" if value.nil?
       raise Puppet::Error, "'content' must be a PGP public key" unless provider.valid_public_key?(value)
     end
 
@@ -46,5 +44,6 @@ Puppet::Type.newtype(:gpg_public_key) do
   end
 
   newproperty(:trust) do
+    newvalues(:undefined, :none, :marginal, :full, :ultimate)
   end
 end

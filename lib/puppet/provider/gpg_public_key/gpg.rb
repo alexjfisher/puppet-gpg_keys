@@ -24,6 +24,7 @@ Puppet::Type.type(:gpg_public_key).provide(:gpg) do
   end
 
   def create
+    raise Puppet::Error, "'content' is mandatory when creating a gpg_public_key" unless resource[:content]
     Puppet.debug "Importing key #{resource[:longkeyid]}"
     keyfile = Tempfile.new('key')
     keyfile.write(resource[:content])
@@ -33,7 +34,7 @@ Puppet::Type.type(:gpg_public_key).provide(:gpg) do
     Puppet.debug output
     keyfile.unlink
 
-    self.trust = resource[:trust]
+    self.trust = resource[:trust] unless resource[:trust].nil?
   end
 
   def destroy
@@ -123,11 +124,11 @@ Puppet::Type.type(:gpg_public_key).provide(:gpg) do
 
   def trustmap
     {
-      'undefined' => 2,
-      'none'      => 3,
-      'marginal'  => 4,
-      'full'      => 5,
-      'ultimate'  => 6
+      undefined: 2,
+      none:      3,
+      marginal:  4,
+      full:      5,
+      ultimate:  6
     }
   end
 end
