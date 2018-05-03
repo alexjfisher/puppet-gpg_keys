@@ -33,8 +33,14 @@ Puppet::Type.type(:gpg_public_key).provide(:gpg, parent: Puppet::Provider::Gpg_k
 
   def destroy
     Puppet.debug "Deleting key #{resource[:longkeyid]}"
+    output = gpg_cmd(['--yes', '--delete-secret-key', fingerprint]) if has_secret_key?
     output = gpg_cmd(['--yes', '--delete-key', resource[:longkeyid]])
     Puppet.debug output
+  end
+
+  def has_secret_key?
+    output = gpg_cmd(['--list-secret-keys', '--with-colons'])
+    output.include? resource[:longkeyid]
   end
 
   def content
