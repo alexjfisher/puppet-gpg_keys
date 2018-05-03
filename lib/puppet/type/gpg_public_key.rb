@@ -33,7 +33,7 @@ Puppet::Type.newtype(:gpg_public_key) do
 
     # Ignore 'Version' header when comparing keys
     def insync?(is)
-      remove_version_header(is) == remove_version_header(should)
+      remove_version_header(is.gsub(/^$\n/, '')) == remove_version_header(should.gsub(/^$\n/, ''))
     end
 
     def remove_version_header(key)
