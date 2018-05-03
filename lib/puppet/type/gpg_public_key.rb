@@ -9,8 +9,30 @@ Puppet::Type.newtype(:gpg_public_key) do
     raise Puppet::Error, "'longkeyid' is mandatory for gpg_public_key" unless self[:longkeyid]
   end
 
-  newparam(:name) do
+  newparam(:user) do
     isnamevar
+  end
+
+  newparam(:longkeyid) do
+    isnamevar
+  end
+
+  def self.title_patterns
+    [
+      [
+        /(^([^\/]*)$)/m,
+       [
+         [:longkeyid]
+        ]
+      ],
+      [
+        /^([^\/]+)\/([^\/]+)$/,
+        [
+          [:user],
+          [:longkeyid]
+        ]
+      ]
+    ]
   end
 
   newparam(:homedir) do
@@ -18,12 +40,6 @@ Puppet::Type.newtype(:gpg_public_key) do
     validate do |value|
       raise Puppet::Error, "'homedir' file path must be absolute, not '#{value}'" unless Puppet::Util.absolute_path?(value) || value == '~/.gnupg'
     end
-  end
-
-  newparam(:user) do
-  end
-
-  newparam(:longkeyid) do
   end
 
   newproperty(:content) do
