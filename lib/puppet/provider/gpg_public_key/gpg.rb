@@ -1,13 +1,7 @@
-Puppet::Type.type(:gpg_public_key).provide(:gpg) do
+require File.join(File.dirname(__FILE__), '..', 'gpg_keys')
+
+Puppet::Type.type(:gpg_public_key).provide(:gpg, parent: Puppet::Provider::Gpg_keys) do
   commands gpg: 'gpg'
-
-  def gpg_cmd(*args)
-    resolved_executable = Puppet::Util.which('gpg')
-    raise Puppet::MissingCommand, format(_("Command #{name} is missing"), name: @name) if resolved_executable.nil?
-    command = [resolved_executable] + ['--homedir', resource[:homedir], '--batch'] + args
-    Puppet::Util::Execution.execute(command, failonfail: true, combine: true, uid: resource[:user])
-  end
-
   def public_keys_ids
     begin
       output = gpg_cmd(['--list-keys', '--with-colons'])
@@ -67,13 +61,6 @@ Puppet::Type.type(:gpg_public_key).provide(:gpg) do
     Puppet.debug("Trust in #{resource[:longkeyid]} is #{trust}")
     return 'unknown' if trust.nil?
     trust
-  end
-
-  def fingerprint
-    Puppet.debug("Getting fingerprint of key id #{resource[:longkeyid]}")
-    output = gpg_cmd(['--fingerprint', '--with-colons', resource[:longkeyid]])
-    fingerprint_line = output.split("\n").sort.grep(%r{^fpr}).first
-    fingerprint_line.split(':')[9]
   end
 
   def trust=(value)
